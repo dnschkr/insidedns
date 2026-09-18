@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What DNS and IP Tests Actually Measure | Inside DNS</title>
+<meta name="description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. A field guide to what each test measures, what it cannot tell you, and how to read the result honestly.">
+<link rel="canonical" href="https://insidedns.com/">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="What DNS and IP Tests Actually Measure">
+<meta property="og:description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. What each test measures, and what it cannot tell you.">
+<meta property="og:url" content="https://insidedns.com/">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "@id": "https://insidedns.com/#article",
+      "headline": "What DNS and IP Tests Actually Measure",
+      "description": "A field guide to what each DNS and IP diagnostic measures, and the question it cannot answer.",
+      "datePublished": "2026-09-18",
+      "dateModified": "2026-09-18",
+      "author": { "@id": "https://insidedns.com/#ishan" },
+      "publisher": { "@id": "https://insidedns.com/#ishan" },
+      "mainEntityOfPage": "https://insidedns.com/",
+      "about": [
+        { "@type": "Thing", "name": "Domain Name System", "sameAs": "https://en.wikipedia.org/wiki/Domain_Name_System" },
+        { "@type": "Thing", "name": "DNS leak", "sameAs": "https://en.wikipedia.org/wiki/DNS_leak" }
+      ],
+      "citation": [
+        { "@type": "CreativeWork", "name": "RFC 1034: Domain Names, Concepts and Facilities", "url": "https://www.rfc-editor.org/rfc/rfc1034" },
+        { "@type": "CreativeWork", "name": "RFC 7871: Client Subnet in DNS Queries", "url": "https://www.rfc-editor.org/rfc/rfc7871" },
+        { "@type": "CreativeWork", "name": "RFC 7208: Sender Policy Framework", "url": "https://www.rfc-editor.org/rfc/rfc7208" },
+        { "@type": "CreativeWork", "name": "RFC 3225: Indicating Resolver Support of DNSSEC", "url": "https://www.rfc-editor.org/rfc/rfc3225" }
+      ]
+    },
+    {
+      "@type": "Person",
+      "@id": "https://insidedns.com/#ishan",
+      "name": "Ishan Karunaratne",
+      "url": "https://insidedns.com/#who",
+      "description": "Builds and operates DNS Checker, a set of DNS, IP and email diagnostics.",
+      "sameAs": ["https://dnschkr.com/about"]
+    }
+  ]
+}
+</script>
+
+<style>
+:root {
+  color-scheme: light dark;
+
+  /* Ink and surface. The mood lives in the type and the one accent, not in a
+     tinted background. */
+  --bg: oklch(1 0 0);
+  --surface: oklch(0.975 0.003 272);
+  --rule: oklch(0.905 0.006 272);
+  --ink: oklch(0.19 0.018 272);
+  --ink-soft: oklch(0.44 0.016 272);
+
+  /* One committed accent, used for links and the measured/limit markers. */
+  --accent: oklch(0.47 0.152 272);
+  --accent-soft: oklch(0.955 0.02 272);
+  --measured: oklch(0.44 0.1 155);
+  --limit: oklch(0.47 0.1 62);
+
+  --measure: 68ch;
+  --step: clamp(1rem, 0.6rem + 1.2vw, 1.4rem);
+
+  --z-skip: 10;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.165 0.014 272);
+    --surface: oklch(0.205 0.016 272);
+    --rule: oklch(0.31 0.018 272);
+    --ink: oklch(0.955 0.005 272);
+    --ink-soft: oklch(0.755 0.012 272);
+    --accent: oklch(0.79 0.128 272);
+    --accent-soft: oklch(0.255 0.036 272);
+    --measured: oklch(0.79 0.12 155);
+    --limit: oklch(0.83 0.115 78);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: oklch(0.165 0.014 272);
+  --surface: oklch(0.205 0.016 272);
+  --rule: oklch(0.31 0.018 272);
+  --ink: oklch(0.955 0.005 272);
+  --ink-soft: oklch(0.755 0.012 272);
+  --accent: oklch(0.79 0.128 272);
+  --accent-soft: oklch(0.255 0.036 272);
+  --measured: oklch(0.79 0.12 155);
+  --limit: oklch(0.83 0.115 78);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(1rem, 0.97rem + 0.14vw, 1.0625rem);
+  line-height: 1.65;
+  text-rendering: optimizeLegibility;
+}
+
+.wrap { width: min(100% - 2rem, 74ch); margin-inline: auto; }
+@media (min-width: 60rem) { .wrap { width: min(100% - 4rem, 74ch); } }
+
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: from-font; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px;
+}
+
+.skip {
+  position: absolute; left: -9999px; z-index: var(--z-skip);
+  background: var(--bg); color: var(--ink); padding: 0.6rem 1rem; border: 1px solid var(--rule);
+}
+.skip:focus { left: 1rem; top: 1rem; }
+
+/* Display face carries the voice; body stays in the system sans. A real
+   contrast axis rather than two sans-serifs that almost match. */
+h1, h2, h3, .serif {
+  font-family: "IBM Plex Serif", ui-serif, Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+h1 { font-size: clamp(2.1rem, 1.45rem + 2.7vw, 3.5rem); line-height: 1.08; margin: 0 0 1rem; }
+h2 { font-size: clamp(1.55rem, 1.25rem + 1.1vw, 2.05rem); line-height: 1.1; margin: 0 0 0.6rem; }
+h3 { font-size: clamp(1.18rem, 1.08rem + 0.4vw, 1.35rem); line-height: 1.2; margin: 0 0 0.35rem; }
+
+p { max-width: var(--measure); text-wrap: pretty; margin: 0 0 1.05em; }
+
+code, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+code { background: var(--surface); padding: 0.1em 0.35em; border-radius: 4px; }
+
+header.masthead { padding: clamp(3.5rem, 8vw, 7rem) 0 clamp(2rem, 4vw, 3rem); }
+
+.kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem; color: var(--ink-soft); margin: 0 0 1.6rem;
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: baseline;
+}
+
+.lede { font-size: 1.22em; color: var(--ink); max-width: 62ch; }
+
+.byline {
+  color: var(--ink-soft); font-size: 0.94rem; border-top: 1px solid var(--rule);
+  padding-top: 1rem; margin-top: 2.25rem; max-width: var(--measure);
+}
+
+section { padding-block: clamp(2.5rem, 5vw, 4.25rem); }
+section + section { border-top: 1px solid var(--rule); }
+
+.intro { color: var(--ink-soft); max-width: var(--measure); }
+
+/* The core device of the page: a claim, then the boundary of that claim.
+   Two rows, not a card, and no side stripe. */
+.tool { padding-block: 1.9rem; }
+.tool + .tool { border-top: 1px solid var(--rule); }
+.tool-head { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: baseline; margin-bottom: 0.7rem; }
+.tool-head h3 { margin: 0; }
+.tool-head .url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem; color: var(--ink-soft);
+}
+
+.pair { display: grid; gap: 0.55rem; margin: 0.9rem 0 0; }
+@media (min-width: 46rem) { .pair { grid-template-columns: 1fr 1fr; gap: 1.5rem; } }
+
+.pair > div { max-width: 46ch; }
+.pair dt {
+  font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em;
+  margin-bottom: 0.25rem;
+}
+.pair .measures dt { color: var(--measured); }
+.pair .limits dt { color: var(--limit); }
+.pair dd { margin: 0; color: var(--ink-soft); font-size: 0.97rem; }
+
+.tablewrap { overflow-x: auto; margin: 1.5rem 0 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; min-width: 34rem; }
+caption { text-align: left; color: var(--ink-soft); font-size: 0.9rem; padding-bottom: 0.7rem; }
+th, td { text-align: left; padding: 0.7rem 1rem 0.7rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 0.8rem; color: var(--ink-soft); }
+tbody tr:last-child td { border-bottom: 0; }
+
+.note {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 1.35rem 1.5rem; margin: 1.6rem 0 0; max-width: var(--measure);
+}
+.note p:last-child { margin-bottom: 0; }
+.note h3 { margin-top: 0; }
+
+.findings { margin: 1.25rem 0 0; padding: 0; list-style: none; max-width: var(--measure); }
+.findings li { padding: 0.65rem 0; border-top: 1px solid var(--rule); color: var(--ink-soft); }
+.findings li:first-child { border-top: 0; }
+.findings b { color: var(--ink); font-weight: 600; }
+
+footer { padding-block: clamp(2.5rem, 5vw, 4rem); color: var(--ink-soft); font-size: 0.93rem; border-top: 1px solid var(--rule); }
+footer p { max-width: var(--measure); }
+
+/* Motion is one quiet settle on load, not a reveal on every section.
+   Content is visible by default so a headless render never ships blank. */
+@media (prefers-reduced-motion: no-preference) {
+  .settle { animation: settle 620ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .settle:nth-child(2) { animation-delay: 60ms; }
+  .settle:nth-child(3) { animation-delay: 110ms; }
+}
+@keyframes settle {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker settle"><span>Inside DNS</span> <span>Field notes on network diagnostics</span></p>
+  <h1 class="settle">Every DNS test answers a narrower question than its name suggests.</h1>
+  <p class="lede settle">A “DNS leak test” does not test your DNS. It observes which recursive resolver reached one authoritative server, once. That is a useful fact and a much smaller one than the name implies. This page is about the gap between the two, tool by tool.</p>
+  <p class="byline">Written by Ishan Karunaratne, who builds and runs <a href="https://dnschkr.com/">DNS Checker</a>. I am reviewing my own tools here, so treat the praise with the suspicion it deserves and the limitations as the part I had no reason to invent. Last verified 18 September 2026.</p>
+</header>
+
+<main id="main">
+
+<section>
+  <h2>Why the name of a test is usually a promise it cannot keep</h2>
+  <p class="intro">Network diagnostics are named after the worry they address, not the measurement they perform. “Is my VPN leaking?” is a worry. “Which resolver addresses appeared at my authoritative nameserver within four seconds of the probe?” is a measurement. The first sells; the second is what actually happened.</p>
+  <p>The gap matters because a clean result gets read as a guarantee. A DNS leak test that returns nothing usually means the probe did not arrive, not that nothing leaks. A geolocation result is a routing and registration artefact, not a position report. A blocklist check that finds nothing tells you about the lists it queried and no others.</p>
+  <p>What follows is each tool paired with its boundary. The boundary is the interesting half.</p>
+</section>
+
+<section>
+  <h2>Reading DNS itself</h2>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/dns-inspector">DNS Inspector</a></h3>
+      <span class="url mono">dnschkr.com/dns-inspector</span>
+    </div>
+    <p>The closest thing to <code>dig</code> in a browser, and the tool I use most. It resolves the exact name you ask about rather than collapsing it to the apex, which sounds obvious until you try to inspect <code>_dmarc.example.com</code> or a bare subdomain somewhere else and get the parent domain’s records back instead.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>The records a recursive resolver returns right now for one exact name, plus delegation, glue, nameserver agreement and DNSSEC chain state.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>What a resolver on the other side of the world sees. Caches diverge, and anycast means two people querying “the same” nameserver reach different machines.</dd></div>
+    </dl>
+  </article>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/dns-propagation-checker">DNS Propagation Checker</a></h3>
+      <span class="url mono">dnschkr.com/dns-propagation-checker</span>
+    </div>
+    <p>The answer to the previous tool’s limitation: query many resolvers in different networks at once and compare. Useful in exactly one situation, which is the hour after you change a record and want to know whether the old answer is still in circulation.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>What a specific set of public resolvers answer at this moment, and where they disagree.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>“Propagation” is a misnomer. Nothing propagates; caches expire. A record is not spreading outward, it is being forgotten at different times in different places. Your own ISP’s resolver is almost certainly not in the sample.</dd></div>
+    </dl>
+  </article>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/whats-my-ip-address">What Is My IP Address</a></h3>
+      <span class="url mono">dnschkr.com/whats-my-ip-address</span>
+    </div>
+    <p>Rebuilt in September 2026 to run the measurements it had previously only written about. It now performs a DNS leak test against a zone I am authoritative for, a WebRTC probe across four STUN operators, a dual-stack reachability check, and a comparison of your browser’s locale and time zone against the IP’s.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>Which resolvers reached my nameserver and the network each belongs to, which addresses WebRTC discloses, whether IPv4 and IPv6 both work, and whether your machine’s settings agree with the connection’s apparent location.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>Whether a matching resolver network means your queries went through the tunnel. A VPN can legitimately forward DNS to a public resolver elsewhere, and large ISPs span several AS numbers. Matching networks are consistent with a working tunnel, not proof of one.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<section>
+  <h2>Judging an address you did not choose</h2>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/ip-address-lookup">IP Address Lookup</a></h3>
+      <span class="url mono">dnschkr.com/ip-address-lookup</span>
+    </div>
+    <p>Built for the case where an address is in your logs and you need to decide what to do about it. Geolocation is the least interesting thing it returns. The useful parts are the RDAP registration, the abuse contacts broken out by category, and the reverse DNS checked in both directions, because a PTR with no matching forward record is a claim rather than a fact.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>Registry ownership, the network block, ASN, forward-confirmed reverse DNS, classification as VPN, proxy, Tor, relay or datacenter, and matches against published blocklists.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>Who was using the address. Geolocation resolves to where a network is routed and registered, which for a mobile carrier can be a gateway in another state. Absence of a classification is not evidence of innocence.</dd></div>
+    </dl>
+  </article>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/blacklist-checker">Blacklist Checker</a></h3>
+      <span class="url mono">dnschkr.com/blacklist-checker</span>
+    </div>
+    <p>Queries DNSBL and RBL zones for an address or domain. The thing worth understanding before you act on the result: these lists disagree with each other on purpose. They have different thresholds, different appeal processes, and different opinions about what deserves listing.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>Whether the queried lists return a listing right now, and the return code each one gave.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>Whether the mail server rejecting you consults any of these lists. Most large providers weigh their own internal reputation far more heavily than public blocklists.</dd></div>
+    </dl>
+  </article>
+
+  <article class="tool">
+    <div class="tool-head">
+      <h3><a href="https://dnschkr.com/reverse-ip-domain-check">Reverse IP Domain Check</a></h3>
+      <span class="url mono">dnschkr.com/reverse-ip-domain-check</span>
+    </div>
+    <p>Lists hostnames observed pointing at an address. Genuinely useful for shared hosting questions and for working out whether an address is a CDN edge.</p>
+    <dl class="pair">
+      <div class="measures"><dt>What it measures</dt><dd>Hostnames whose A or AAAA records were observed resolving to this address during the scan window, with first and last seen dates.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>Every domain on the address, despite what tools in this category usually claim. It is a sample from observed zone data, and behind a CDN the result describes the CDN rather than any relationship between the sites.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<section>
+  <h2>Whether your mail will arrive</h2>
+  <p class="intro">Email authentication is three records that fail in different ways, which is why checking them separately is worth the clicks. <a href="https://dnschkr.com/spf-record-checker">SPF</a> fails silently when you exceed ten DNS lookups; <a href="https://dnschkr.com/dkim-record-checker">DKIM</a> fails when the selector does not exist or the key is the wrong length; <a href="https://dnschkr.com/dmarc-record-checker">DMARC</a> fails when alignment is stricter than the mail you actually send.</p>
+
+  <div class="tablewrap">
+    <table>
+      <caption>The failure each record produces when it is wrong, which is rarely the failure people expect.</caption>
+      <thead>
+        <tr><th scope="col">Record</th><th scope="col">Typical mistake</th><th scope="col">What you see</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="https://dnschkr.com/spf-record-checker">SPF</a></td>
+          <td>More than ten DNS lookups once includes are expanded</td>
+          <td>A permanent error that many receivers treat as no SPF at all</td>
+        </tr>
+        <tr>
+          <td><a href="https://dnschkr.com/dkim-record-checker">DKIM</a></td>
+          <td>Selector published for one sender, mail sent through another</td>
+          <td>Signature missing rather than invalid, which looks like nothing is wrong</td>
+        </tr>
+        <tr>
+          <td><a href="https://dnschkr.com/dmarc-record-checker">DMARC</a></td>
+          <td>Strict alignment with a subdomain or third-party sender</td>
+          <td>Mail that passes SPF and DKIM and is still rejected</td>
+        </tr>
+        <tr>
+          <td><a href="https://dnschkr.com/mx-record-lookup">MX</a></td>
+          <td>A CNAME where the hostname should be, or a trailing dot missing</td>
+          <td>Intermittent delivery depending on the sending server’s tolerance</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:1.4rem"><a href="https://dnschkr.com/email-tester">The email tester</a> is the one to reach for when the records all look right and mail still does not land. It sends a real message and reports what the receiving side actually concluded, which is the only opinion that matters.</p>
+</section>
+
+<section id="finding">
+  <h2>One thing I learned building the DNS leak test</h2>
+  <p class="intro">This is the part of the page that is not a review. It cost me three attempts in September 2026 and I have not seen it written down clearly anywhere, so it is here.</p>
+
+  <p>To see which resolver serves a visitor, you have to be authoritative for a name. There is no other way: the browser cannot see its resolver, and only the authoritative server for a name is contacted by that resolver directly. So you delegate a zone and watch who turns up.</p>
+
+  <ul class="findings">
+    <li><b>Cloudflare’s free plan accepts an NS record for a subdomain and never serves the referral.</b> The API returns <code>success: true</code>, the record appears in the dashboard, and resolvers get <code>NOERROR</code> with the parent SOA. Subdomain delegation is an enterprise feature. Nothing errors, so the delegation simply does not work and you are left debugging your nameserver.</li>
+    <li><b>GoDaddy’s API refuses custom nameserver hostnames</b> that are not registered as host records at the registry, and host record management is not in the public API. It reports “nameserver hostname is not available” even when the hostname resolves correctly.</li>
+    <li><b>Route 53 does serve subdomain delegations,</b> and registrars accept AWS nameservers without host registration because they are already registered. Registrar to Route 53 to your own listener is the chain that works.</li>
+    <li><b>Refusing <code>ANY</code> queries does not make an authoritative server safe.</b> Mine echoed the question section back in refusals, and a DNS library that decodes compressed names re-encodes them uncompressed. One packet of 180 compressed questions produced a reply 33.9 times its size, aimed at whatever source address was spoofed. The fix is to validate before replying and answer only a single question, never the caller’s list.</li>
+  </ul>
+
+  <div class="note">
+    <h3>The measurement that surprised me</h3>
+    <p>Running the finished test through Google’s public resolver, the probe arrived carrying an EDNS Client Subnet option with my own <code>/24</code> in it. That is <a href="https://www.rfc-editor.org/rfc/rfc7871">RFC 7871</a> working exactly as designed: the resolver tells authoritative servers roughly where you are so they can return a nearby answer. It is a performance feature with a privacy cost that almost nobody using a public resolver has been told about, and it is visible to every authoritative server you touch.</p>
+  </div>
+</section>
+
+<section id="who">
+  <h2>Who wrote this, and why it is not neutral</h2>
+  <p>I am Ishan Karunaratne. I build and operate <a href="https://dnschkr.com/">DNS Checker</a>, which means every tool linked above is mine. A review of your own work is worth less than an independent one, and I would rather say so plainly than let the page imply otherwise.</p>
+  <p>What I think survives that conflict of interest is the second half of each entry. Nobody is incentivised to write down what their own tool cannot do, and those are the parts I would want to read before trusting a result. If you find one of them wrong, <a href="https://dnschkr.com/contact">tell me</a> and I will correct it here.</p>
+  <p>This domain also does real work: <code>probe.insidedns.com</code> is the zone the DNS leak test delegates to, which is why it exists at all.</p>
+</section>
+
+</main>
+
+<footer>
+  <p>Inside DNS is a personal notebook by <a href="https://dnschkr.com/about">Ishan Karunaratne</a>. The tools discussed are at <a href="https://dnschkr.com/">dnschkr.com</a>. Last verified 18 September 2026.</p>
+</footer>
+
+</div>
+</body>
+</html>
