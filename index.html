@@ -38,10 +38,13 @@
         { "@type": "Thing", "name": "DNS leak", "sameAs": "https://en.wikipedia.org/wiki/DNS_leak" }
       ],
       "citation": [
-        { "@type": "CreativeWork", "name": "RFC 1034: Domain Names, Concepts and Facilities", "url": "https://www.rfc-editor.org/rfc/rfc1034" },
+        { "@type": "CreativeWork", "name": "RFC 1035: Domain Names, Implementation and Specification", "url": "https://www.rfc-editor.org/rfc/rfc1035" },
+        { "@type": "CreativeWork", "name": "RFC 2181: Clarifications to the DNS Specification", "url": "https://www.rfc-editor.org/rfc/rfc2181" },
         { "@type": "CreativeWork", "name": "RFC 7871: Client Subnet in DNS Queries", "url": "https://www.rfc-editor.org/rfc/rfc7871" },
         { "@type": "CreativeWork", "name": "RFC 7208: Sender Policy Framework", "url": "https://www.rfc-editor.org/rfc/rfc7208" },
-        { "@type": "CreativeWork", "name": "RFC 3225: Indicating Resolver Support of DNSSEC", "url": "https://www.rfc-editor.org/rfc/rfc3225" }
+        { "@type": "CreativeWork", "name": "RFC 6376: DomainKeys Identified Mail", "url": "https://www.rfc-editor.org/rfc/rfc6376" },
+        { "@type": "CreativeWork", "name": "RFC 7489: Domain-based Message Authentication, Reporting and Conformance", "url": "https://www.rfc-editor.org/rfc/rfc7489" },
+        { "@type": "CreativeWork", "name": "RFC 9619: Initial QDCOUNT Values in DNS Messages", "url": "https://www.rfc-editor.org/rfc/rfc9619" }
       ]
     },
     {
@@ -237,7 +240,7 @@ footer p { max-width: var(--measure); }
 <header class="masthead">
   <h1 class="settle">Every DNS test answers a narrower question than its name suggests.</h1>
   <p class="lede settle">A “DNS leak test” does not test your DNS. It observes which recursive resolver reached one authoritative server, once. That is a useful fact and a much smaller one than the name implies. This page is about the gap between the two, tool by tool.</p>
-  <p class="byline">Written by Ishan Karunaratne, who builds and runs <a href="https://dnschkr.com/">DNS Checker</a>. I am reviewing my own tools here, so treat the praise with the suspicion it deserves and the limitations as the part I had no reason to invent. Last verified 18 September 2026.</p>
+  <p class="byline">Written by Ishan Karunaratne, who builds and runs <a href="https://dnschkr.com/">DNS Checker</a>. I am reviewing my own tools here, so treat the praise with the suspicion it deserves and the limitations as the part I had no reason to invent. Published 18 September 2026, and corrected the same day after an independent review found errors in it.</p>
 </header>
 
 <main id="main">
@@ -313,7 +316,7 @@ footer p { max-width: var(--measure); }
 
 <section>
   <h2>Whether your mail will arrive</h2>
-  <p class="intro">Email authentication is three records that fail in different ways, which is why checking them separately is worth the clicks. <a href="https://dnschkr.com/spf-record-checker">SPF</a> fails silently when you exceed the ten DNS lookups <a href="https://www.rfc-editor.org/rfc/rfc7208#section-4.6.4">RFC 7208 §4.6.4</a> allows; <a href="https://dnschkr.com/dkim-record-checker">DKIM</a> (<a href="https://www.rfc-editor.org/rfc/rfc6376">RFC 6376</a>) fails when the selector does not exist or the key is the wrong length; <a href="https://dnschkr.com/dmarc-record-checker">DMARC</a> (<a href="https://www.rfc-editor.org/rfc/rfc7489">RFC 7489</a>) fails when alignment is stricter than the mail you actually send.</p>
+  <p class="intro">Email authentication is three records that fail in different ways, which is why checking them separately is worth the clicks. <a href="https://dnschkr.com/spf-record-checker">SPF</a> returns <code>permerror</code> once evaluation exceeds ten DNS-querying terms, and nested <code>include</code> and <code>redirect</code> lookups count toward that limit (<a href="https://www.rfc-editor.org/rfc/rfc7208#section-4.6.4">RFC 7208 §4.6.4</a>). <a href="https://dnschkr.com/dkim-record-checker">DKIM</a> (<a href="https://www.rfc-editor.org/rfc/rfc6376">RFC 6376</a>) fails verification when the selector’s key cannot be retrieved. <a href="https://dnschkr.com/dmarc-record-checker">DMARC</a> (<a href="https://www.rfc-editor.org/rfc/rfc7489">RFC 7489</a>) fails when neither authenticated domain aligns with the From domain.</p>
 
   <div class="tablewrap">
     <table>
@@ -325,28 +328,28 @@ footer p { max-width: var(--measure); }
         <tr>
           <td><a href="https://dnschkr.com/spf-record-checker">SPF</a></td>
           <td>More than ten DNS lookups once includes are expanded</td>
-          <td>A permanent error that many receivers treat as no SPF at all</td>
+          <td><code>permerror</code>, and the receiver decides what that means for the message</td>
         </tr>
         <tr>
           <td><a href="https://dnschkr.com/dkim-record-checker">DKIM</a></td>
           <td>Selector published for one sender, mail sent through another</td>
-          <td>Signature missing rather than invalid, which looks like nothing is wrong</td>
+          <td>Verification fails. An unsigned message is a different case again, with no signature at all</td>
         </tr>
         <tr>
           <td><a href="https://dnschkr.com/dmarc-record-checker">DMARC</a></td>
           <td>Strict alignment with a subdomain or third-party sender</td>
-          <td>Mail that passes SPF and DKIM and is still rejected</td>
+          <td>SPF and DKIM both pass, neither aligns with the From domain, and the receiver may still reject</td>
         </tr>
         <tr>
           <td><a href="https://dnschkr.com/mx-record-lookup">MX</a></td>
-          <td>A CNAME where the hostname should be, or a trailing dot missing</td>
-          <td>Intermittent delivery depending on the sending server’s tolerance</td>
+          <td>An MX target that is an alias, or a relative name expanded under the wrong origin</td>
+          <td>Delivery failures that look intermittent because different senders resolve it differently</td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <p style="margin-top:1.4rem"><a href="https://dnschkr.com/email-tester">The email tester</a> is the one to reach for when the records all look right and mail still does not land. It sends a real message and reports what the receiving side actually concluded, which is the only opinion that matters.</p>
+  <p style="margin-top:1.4rem"><a href="https://dnschkr.com/email-tester">The email tester</a> is the one to reach for when the records all look right and mail still does not land. You send a message to it from your normal mail path and it reports what authentication and spam checks concluded at that receiver. That is one receiver’s opinion, not a guarantee about anyone else’s.</p>
 </section>
 
 <section id="finding">
@@ -356,15 +359,15 @@ footer p { max-width: var(--measure); }
   <p>To see which resolver serves a visitor, you have to be authoritative for a name. There is no other way: the browser cannot see its resolver, and only the authoritative server for a name is contacted by that resolver directly (<a href="https://www.rfc-editor.org/rfc/rfc1035">RFC 1035</a>). So you delegate a zone and watch who turns up.</p>
 
   <ul class="findings">
-    <li><b>Cloudflare’s free plan accepts an NS record for a subdomain and never serves the referral.</b> The API returns <code>success: true</code>, the record appears in the dashboard, and resolvers get <code>NOERROR</code> with the parent SOA. Subdomain delegation is an enterprise feature. Nothing errors, so the delegation simply does not work and you are left debugging your nameserver.</li>
-    <li><b>GoDaddy’s API refuses custom nameserver hostnames</b> that are not registered as host records at the registry, and host record management is not in the public API. It reports “nameserver hostname is not available” even when the hostname resolves correctly.</li>
+    <li><b>My Cloudflare delegation returned the parent SOA instead of a referral, and I still do not know why.</b> The API returned <code>success: true</code>, the NS record appeared in the zone, and resolvers got <code>NOERROR</code> with the parent SOA rather than a referral to my nameserver. I first wrote that subdomain delegation was an enterprise feature. That was wrong, and I had not checked: Cloudflare <a href="https://developers.cloudflare.com/dns/manage-dns-records/how-to/subdomains-outside-cloudflare/">documents outgoing delegation as available on Free</a>. The failure was real; the explanation was invented. Two things I did not rule out: I tested within a minute of creating the record, and the nameserver I pointed at lived inside the same zone.</li>
+    <li><b>GoDaddy’s API rejected every custom nameserver hostname I tried,</b> with “nameserver hostname is not available”, including hostnames that resolved correctly. I could find no public endpoint for registering the registry host records it appears to want. That is what happened on my account with my token, which is not the same as saying it is how the API behaves for everyone.</li>
     <li><b>Route 53 does serve subdomain delegations,</b> and registrars accept AWS nameservers without host registration because they are already registered. Registrar to Route 53 to your own listener is the chain that works.</li>
-    <li><b>Refusing <code>ANY</code> queries does not make an authoritative server safe.</b> Mine echoed the question section back in refusals, and a DNS library that decodes compressed names re-encodes them uncompressed. One packet of 180 compressed questions produced a reply 33.9 times its size, aimed at whatever source address was spoofed. The fix is to validate before replying and answer only a single question, never the caller’s list.</li>
+    <li><b>Refusing <code>ANY</code> did not make my server safe, because the amplification was inside the refusal.</b> It echoed the question section back, and the library I used decodes compressed names and re-encodes them uncompressed. A reviewer reproduced 33.9x expansion against my code using 180 compressed questions in a single packet. I did not measure that figure myself and it depends on the library. What I did measure, after the fix, is that the same attack now draws zero replies. The fix is not “answer the first question” either: <a href="https://www.rfc-editor.org/rfc/rfc9619#section-4">RFC 9619 §4</a> requires <code>FORMERR</code> when <code>QDCOUNT</code> exceeds one, and the reply must never carry the caller’s question list.</li>
   </ul>
 
   <div class="note">
     <h3>The measurement that surprised me</h3>
-    <p>Running the finished test through Google’s public resolver, the probe arrived carrying an EDNS Client Subnet option with my own <code>/24</code> in it. That is <a href="https://www.rfc-editor.org/rfc/rfc7871">RFC 7871</a> working exactly as designed: the resolver tells authoritative servers roughly where you are so they can return a nearby answer. It is a performance feature with a privacy cost that almost nobody using a public resolver has been told about, and it is visible to every authoritative server you touch.</p>
+    <p>Running the finished test through Google Public DNS, the probe arrived carrying an EDNS Client Subnet option with my IPv4 <code>/24</code> in it. That is <a href="https://www.rfc-editor.org/rfc/rfc7871">RFC 7871</a> working as designed: the resolver passes part of your address so authoritative servers can return a nearby answer. Cloudflare and Quad9 sent nothing in the same run. Whether it is sent depends on the resolver’s policy and the destination server, so this is one observation rather than a general rule. Worth knowing the option exists.</p>
   </div>
 </section>
 
@@ -378,7 +381,7 @@ footer p { max-width: var(--measure); }
 </main>
 
 <footer>
-  <p>Inside DNS is a personal notebook by <a href="https://dnschkr.com/about">Ishan Karunaratne</a>. The tools discussed are at <a href="https://dnschkr.com/">dnschkr.com</a>. Last verified 18 September 2026.</p>
+  <p>Inside DNS is a personal notebook by <a href="https://dnschkr.com/about">Ishan Karunaratne</a>. The tools discussed are at <a href="https://dnschkr.com/">dnschkr.com</a>. Published 18 September 2026, and corrected the same day after an independent review found errors in it.</p>
 </footer>
 
 </div>
