@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>What DNS and IP Tests Actually Measure | Inside DNS</title>
-<meta name="description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. A field guide to what each test measures, what it cannot tell you, and how to read the result honestly.">
+<meta name="description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. What each test measures, and what it cannot tell you.">
 <link rel="canonical" href="https://insidedns.com/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/favicon.svg">
@@ -265,7 +265,7 @@ footer p { max-width: var(--measure); }
     <p>The closest thing to <code>dig</code> in a browser, and the tool I use most. It resolves the exact name you ask about rather than collapsing it to the apex, which sounds obvious until you try to inspect <code>_dmarc.example.com</code> or a bare subdomain somewhere else and get the parent domain’s records back instead.</p>
     <dl class="pair">
       <div class="measures"><dt>What it measures</dt><dd>The records a recursive resolver returns right now for one exact name, plus delegation, glue, nameserver agreement and DNSSEC chain state.</dd></div>
-      <div class="limits"><dt>What it cannot tell you</dt><dd>What a resolver on the other side of the world sees. Caches diverge, and anycast means two people querying “the same” nameserver reach different machines.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>What a resolver on the other side of the world sees. Caches diverge, and anycast means two people querying “the same” nameserver reach different machines. The delegation rules are <a href="https://www.rfc-editor.org/rfc/rfc1034">RFC 1034</a>.</dd></div>
     </dl>
   </article>
 
@@ -277,7 +277,7 @@ footer p { max-width: var(--measure); }
     <p>The answer to the previous tool’s limitation: query many resolvers in different networks at once and compare. Useful in exactly one situation, which is the hour after you change a record and want to know whether the old answer is still in circulation.</p>
     <dl class="pair">
       <div class="measures"><dt>What it measures</dt><dd>What a specific set of public resolvers answer at this moment, and where they disagree.</dd></div>
-      <div class="limits"><dt>What it cannot tell you</dt><dd>“Propagation” is a misnomer. Nothing propagates; caches expire. A record is not spreading outward, it is being forgotten at different times in different places. Your own ISP’s resolver is almost certainly not in the sample.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>“Propagation” is a misnomer. Nothing propagates; caches expire. A record is not spreading outward, it is being forgotten at different times in different places, on the TTL each resolver was given (<a href="https://www.rfc-editor.org/rfc/rfc2181#section-8">RFC 2181 §8</a>). Your own ISP’s resolver is almost certainly not in the sample.</dd></div>
     </dl>
   </article>
 
@@ -286,7 +286,7 @@ footer p { max-width: var(--measure); }
       <h3><a href="https://dnschkr.com/whats-my-ip-address">What Is My IP Address</a></h3>
       <span class="url mono">dnschkr.com/whats-my-ip-address</span>
     </div>
-    <p>Rebuilt in September 2026 to run the measurements it had previously only written about. It now performs a DNS leak test against a zone I am authoritative for, a WebRTC probe across four STUN operators, a dual-stack reachability check, and a comparison of your browser’s locale and time zone against the IP’s.</p>
+    <p>Rebuilt in September 2026 to run the measurements it had previously only written about. It now performs a DNS leak test against a zone I am authoritative for, a WebRTC probe across four <a href="https://www.rfc-editor.org/rfc/rfc8489">STUN</a> operators, a dual-stack reachability check, and a comparison of your browser’s locale and time zone against the IP’s.</p>
     <dl class="pair">
       <div class="measures"><dt>What it measures</dt><dd>Which resolvers reached my nameserver and the network each belongs to, which addresses WebRTC discloses, whether IPv4 and IPv6 both work, and whether your machine’s settings agree with the connection’s apparent location.</dd></div>
       <div class="limits"><dt>What it cannot tell you</dt><dd>Whether a matching resolver network means your queries went through the tunnel. A VPN can legitimately forward DNS to a public resolver elsewhere, and large ISPs span several AS numbers. Matching networks are consistent with a working tunnel, not proof of one.</dd></div>
@@ -305,7 +305,7 @@ footer p { max-width: var(--measure); }
     <p>Built for the case where an address is in your logs and you need to decide what to do about it. Geolocation is the least interesting thing it returns. The useful parts are the RDAP registration, the abuse contacts broken out by category, and the reverse DNS checked in both directions, because a PTR with no matching forward record is a claim rather than a fact.</p>
     <dl class="pair">
       <div class="measures"><dt>What it measures</dt><dd>Registry ownership, the network block, ASN, forward-confirmed reverse DNS, classification as VPN, proxy, Tor, relay or datacenter, and matches against published blocklists.</dd></div>
-      <div class="limits"><dt>What it cannot tell you</dt><dd>Who was using the address. Geolocation resolves to where a network is routed and registered, which for a mobile carrier can be a gateway in another state. Absence of a classification is not evidence of innocence.</dd></div>
+      <div class="limits"><dt>What it cannot tell you</dt><dd>Who was using the address. Geolocation resolves to where a network is routed and registered, which for a mobile carrier can be a gateway in another state. MaxMind <a href="https://support.maxmind.com/hc/en-us/articles/4407630607131">publishes its own accuracy figures</a>, and they are lower than most tools imply. Absence of a classification is not evidence of innocence.</dd></div>
     </dl>
   </article>
 
@@ -314,7 +314,7 @@ footer p { max-width: var(--measure); }
       <h3><a href="https://dnschkr.com/blacklist-checker">Blacklist Checker</a></h3>
       <span class="url mono">dnschkr.com/blacklist-checker</span>
     </div>
-    <p>Queries DNSBL and RBL zones for an address or domain. The thing worth understanding before you act on the result: these lists disagree with each other on purpose. They have different thresholds, different appeal processes, and different opinions about what deserves listing.</p>
+    <p>Queries DNSBL and RBL zones for an address or domain. The thing worth understanding before you act on the result: these lists disagree with each other on purpose. They have different thresholds, different appeal processes, and different opinions about what deserves listing. <a href="https://www.spamhaus.org/blocklists/do-not-route-or-peer/">Spamhaus DROP</a> lists hijacked netblocks; <a href="https://iplists.firehol.org/?ipset=firehol_level1">FireHOL Level 1</a> aggregates attack sources. A listing on one says nothing about the other.</p>
     <dl class="pair">
       <div class="measures"><dt>What it measures</dt><dd>Whether the queried lists return a listing right now, and the return code each one gave.</dd></div>
       <div class="limits"><dt>What it cannot tell you</dt><dd>Whether the mail server rejecting you consults any of these lists. Most large providers weigh their own internal reputation far more heavily than public blocklists.</dd></div>
@@ -336,7 +336,7 @@ footer p { max-width: var(--measure); }
 
 <section>
   <h2>Whether your mail will arrive</h2>
-  <p class="intro">Email authentication is three records that fail in different ways, which is why checking them separately is worth the clicks. <a href="https://dnschkr.com/spf-record-checker">SPF</a> fails silently when you exceed ten DNS lookups; <a href="https://dnschkr.com/dkim-record-checker">DKIM</a> fails when the selector does not exist or the key is the wrong length; <a href="https://dnschkr.com/dmarc-record-checker">DMARC</a> fails when alignment is stricter than the mail you actually send.</p>
+  <p class="intro">Email authentication is three records that fail in different ways, which is why checking them separately is worth the clicks. <a href="https://dnschkr.com/spf-record-checker">SPF</a> fails silently when you exceed the ten DNS lookups <a href="https://www.rfc-editor.org/rfc/rfc7208#section-4.6.4">RFC 7208 §4.6.4</a> allows; <a href="https://dnschkr.com/dkim-record-checker">DKIM</a> (<a href="https://www.rfc-editor.org/rfc/rfc6376">RFC 6376</a>) fails when the selector does not exist or the key is the wrong length; <a href="https://dnschkr.com/dmarc-record-checker">DMARC</a> (<a href="https://www.rfc-editor.org/rfc/rfc7489">RFC 7489</a>) fails when alignment is stricter than the mail you actually send.</p>
 
   <div class="tablewrap">
     <table>
@@ -376,7 +376,7 @@ footer p { max-width: var(--measure); }
   <h2>One thing I learned building the DNS leak test</h2>
   <p class="intro">This is the part of the page that is not a review. It cost me three attempts in September 2026 and I have not seen it written down clearly anywhere, so it is here.</p>
 
-  <p>To see which resolver serves a visitor, you have to be authoritative for a name. There is no other way: the browser cannot see its resolver, and only the authoritative server for a name is contacted by that resolver directly. So you delegate a zone and watch who turns up.</p>
+  <p>To see which resolver serves a visitor, you have to be authoritative for a name. There is no other way: the browser cannot see its resolver, and only the authoritative server for a name is contacted by that resolver directly (<a href="https://www.rfc-editor.org/rfc/rfc1035">RFC 1035</a>). So you delegate a zone and watch who turns up.</p>
 
   <ul class="findings">
     <li><b>Cloudflare’s free plan accepts an NS record for a subdomain and never serves the referral.</b> The API returns <code>success: true</code>, the record appears in the dashboard, and resolvers get <code>NOERROR</code> with the parent SOA. Subdomain delegation is an enterprise feature. Nothing errors, so the delegation simply does not work and you are left debugging your nameserver.</li>
