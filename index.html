@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What DNS and IP Tests Actually Measure | Inside DNS</title>
-<meta name="description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. What each test measures, and what it cannot tell you.">
+<title>Does Your DNS Resolver Minimise? Test It | Inside DNS</title>
+<meta name="description" content="Run a live probe against an authoritative nameserver and see what your DNS resolver discloses: QNAME minimisation, EDNS Client Subnet, DNSSEC, buffer size.">
 <link rel="canonical" href="https://insidedns.com/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/favicon.svg">
 
 <meta property="og:type" content="article">
-<meta property="og:title" content="What DNS and IP Tests Actually Measure">
-<meta property="og:description" content="Every DNS and IP diagnostic answers a narrower question than its name suggests. What each test measures, and what it cannot tell you.">
+<meta property="og:title" content="Does Your DNS Resolver Minimise? Test It">
+<meta property="og:description" content="A live probe against a real authoritative nameserver, showing what your resolver tells strangers about you.">
 <meta property="og:url" content="https://insidedns.com/">
 <meta name="twitter:card" content="summary_large_image">
 
@@ -26,8 +26,8 @@
     {
       "@type": "TechArticle",
       "@id": "https://insidedns.com/#article",
-      "headline": "What DNS and IP Tests Actually Measure",
-      "description": "A field guide to what each DNS and IP diagnostic measures, and the question it cannot answer.",
+      "headline": "Does Your DNS Resolver Minimise? Test It",
+      "description": "A live probe against an authoritative nameserver showing what a recursive resolver discloses: QNAME minimisation, EDNS Client Subnet, DNSSEC and buffer size.",
       "datePublished": "2026-09-18",
       "dateModified": "2026-09-18",
       "author": { "@id": "https://insidedns.com/#ishan" },
@@ -197,6 +197,26 @@ section + section { border-top: 1px solid var(--rule); }
   max-width: 64ch;
 }
 
+
+.run {
+  font: inherit; font-weight: 600;
+  background: var(--accent); color: oklch(0.99 0 0);
+  border: 0; border-radius: 8px; padding: 0.7rem 1.25rem;
+  cursor: pointer; margin-top: 0.5rem;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.run:hover { background: oklch(from var(--accent) calc(l - 0.06) c h); }
+.run[disabled] { opacity: 0.55; cursor: progress; }
+.state { color: var(--ink-soft); font-size: 0.94rem; min-height: 1.4em; margin-top: 0.85rem; }
+.verdict { font-size: 1.15rem; margin: 0 0 0.4rem; }
+.verdict b { font-weight: 600; }
+#qlog {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 0.9rem 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.55; margin: 0.8rem 0 0;
+}
+.fineprint { font-size: 0.88rem; color: var(--ink-soft); margin-top: 0.7rem; }
+details summary { cursor: pointer; }
+
 .tablewrap { overflow-x: auto; margin: 1.5rem 0 0; }
 table { border-collapse: collapse; width: 100%; font-size: 0.95rem; min-width: 34rem; }
 caption { text-align: left; color: var(--ink-soft); font-size: 0.9rem; padding-bottom: 0.7rem; }
@@ -238,12 +258,45 @@ footer p { max-width: var(--measure); }
 <div class="wrap">
 
 <header class="masthead">
-  <h1 class="settle">Every DNS test answers a narrower question than its name suggests.</h1>
-  <p class="lede settle">A “DNS leak test” does not test your DNS. It observes which recursive resolver reached one authoritative server, once. That is a useful fact and a much smaller one than the name implies. This page is about the gap between the two, tool by tool.</p>
+  <h1 class="settle">What does your DNS resolver tell strangers about you?</h1>
+  <p class="lede settle">Every name you look up passes through a recursive resolver, and that resolver decides how much of it to repeat to the nameservers it asks. Some send only the label they need. Some send the whole thing to every server in the chain, including the root. You can find out which yours does, because the nameserver doing the watching is the one serving this domain.</p>
   <p class="byline">Written by Ishan Karunaratne, who builds and runs <a href="https://dnschkr.com/">DNS Checker</a>. I am reviewing my own tools here, so treat the praise with the suspicion it deserves and the limitations as the part I had no reason to invent. Published 18 September 2026, and corrected the same day after an independent review found errors in it.</p>
 </header>
 
 <main id="main">
+
+<section id="observe">
+  <h2>Ask your resolver what it tells strangers about you</h2>
+  <p class="intro">Your browser fires a handful of lookups for names under a zone this site is authoritative for. Whatever recursive resolver turns up at that nameserver is, by definition, the one doing your DNS, and everything it discloses on the way in is recorded below. Nothing is stored for more than three minutes and nothing identifies you beyond the resolver addresses themselves.</p>
+
+  <button id="run" class="run" type="button">Run the probe</button>
+  <p id="state" class="state" role="status" aria-live="polite"></p>
+
+  <div id="out" hidden>
+    <h3 id="verdict-h">QNAME minimisation</h3>
+    <p id="verdict" class="verdict"></p>
+    <p id="verdict-why" class="bound"></p>
+
+    <div class="tablewrap">
+      <table id="restable">
+        <caption>Every resolver that reached the nameserver, and what it volunteered.</caption>
+        <thead><tr>
+          <th scope="col">Resolver</th><th scope="col">Client subnet</th>
+          <th scope="col">DNSSEC</th><th scope="col">EDNS buffer</th><th scope="col">Transport</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <details id="rawq">
+      <summary>The exact names it asked for</summary>
+      <pre id="qlog"></pre>
+      <p class="fineprint">This is the record of what reached the authoritative server. A resolver that sends only the labels it needs at each step tells the nameserver less about you than one that sends the whole name every time.</p>
+    </details>
+  </div>
+
+  <noscript><p class="bound">This one needs JavaScript, because the measurement is the lookups your browser makes.</p></noscript>
+</section>
 
 <section>
   <h2>Why the name of a test is usually a promise it cannot keep</h2>
@@ -385,5 +438,96 @@ footer p { max-width: var(--measure); }
 </footer>
 
 </div>
+
+<script>
+(() => {
+  "use strict";
+  const ZONE = "probe.insidedns.com";
+  const READBACK = "https://v4.insidedns.com/resolver/";
+  const PROBES = 5;
+
+  const $ = (id) => document.getElementById(id);
+  const hex = (n) => {
+    const b = new Uint8Array(n);
+    crypto.getRandomValues(b);
+    return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  };
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  async function run() {
+    const btn = $("run"), state = $("state"), out = $("out");
+    btn.disabled = true;
+    out.hidden = true;
+    state.textContent = "Firing " + PROBES + " lookups\u2026";
+
+    const token = hex(5);
+
+    // Deliberately deep names. A resolver that minimises asks for the short
+    // part first and walks down; one that does not sends all of this every
+    // time. The depth is what makes the difference legible.
+    await Promise.all(
+      Array.from({ length: PROBES }, () => {
+        const host = hex(3) + "." + hex(3) + "." + hex(3) + "." + token + "." + ZONE;
+        return fetch("https://" + host + "/", { mode: "no-cors", cache: "no-store",
+          signal: AbortSignal.timeout(4000) }).catch(() => {});
+      })
+    );
+
+    state.textContent = "Waiting for the nameserver\u2026";
+
+    let data = null;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 1400));
+      try {
+        const res = await fetch(READBACK + token, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+        if (!res.ok) continue;
+        const body = await res.json();
+        if (body.resolvers && body.resolvers.length) { data = body; if (i >= 1) break; }
+      } catch (_) { /* keep waiting */ }
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Run it again";
+
+    if (!data) {
+      state.textContent = "No resolver reached the nameserver. That usually means something blocked the lookups rather than that nothing happened, so it is not evidence either way.";
+      return;
+    }
+    state.textContent = "";
+    render(data);
+    out.hidden = false;
+  }
+
+  function render(d) {
+    const m = d.qname_minimisation || {};
+    const v = $("verdict"), why = $("verdict-why");
+
+    if (m.verdict === "yes") {
+      v.innerHTML = "<b>Your resolver minimises.</b> It asked for as little as it could get away with.";
+      why.textContent = "The shortest name it sent had " + m.shortest_labels + " labels where the full probe had " +
+        m.longest_labels + ". It walked down the tree, telling each nameserver only the part it needed to find the next one, so this server never learned the whole name you looked up.";
+    } else if (m.verdict === "no") {
+      v.innerHTML = "<b>Your resolver does not minimise.</b> It sent the whole name.";
+      why.textContent = "Every query arrived at " + m.longest_labels +
+        " labels, the full name. That means each nameserver in the chain, including the root and the TLD, was told exactly what you were looking up rather than only the part it needed to answer.";
+    } else {
+      v.innerHTML = "<b>Not enough queries to say.</b>";
+      why.textContent = "Only one query arrived, and a single query cannot distinguish a resolver that minimises from one that does not. Running it again usually settles it.";
+    }
+
+    const rows = (d.resolvers || []).map((r) => "<tr>" +
+      "<td class=\"mono\">" + esc(r.resolver) + "</td>" +
+      "<td class=\"mono\">" + (r.client_subnet ? esc(r.client_subnet) : "not sent") + "</td>" +
+      "<td>" + (r.dnssec_requested ? "requested" : "not requested") + "</td>" +
+      "<td class=\"mono\">" + (r.edns_buffer_size ? esc(r.edns_buffer_size) + " bytes" : "no EDNS") + "</td>" +
+      "<td>" + esc(r.transport) + "</td></tr>").join("");
+    document.querySelector("#restable tbody").innerHTML = rows;
+
+    $("qlog").textContent = (d.queries || []).map((q) => q.qtype.padEnd(5) + " " + q.qname).join("\n");
+  }
+
+  $("run").addEventListener("click", run);
+})();
+</script>
 </body>
 </html>
