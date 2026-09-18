@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Inside DNS">
+  <rect width="32" height="32" rx="7" fill="#1b1830"/>
+  <!-- The DNS root zone is written as a single dot. Nothing else needed. -->
+  <circle cx="16" cy="21" r="4.2" fill="#8f86f5"/>
+  <path d="M9 11.5h14" stroke="#4b4680" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
